@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { fmtPrice, fmtPct, fmtEok, cls } from '../lib/api.js';
+import { fmtPct, cls } from '../lib/api.js';
 
 const TABS = [
   { id: 'gain', label: '급상승' },
@@ -7,7 +7,7 @@ const TABS = [
   { id: 'vol', label: '거래대금' },
 ];
 
-export default function RankTable({ stocks, onSelect }) {
+export default function RankTable({ market, stocks, onSelect }) {
   const [tab, setTab] = useState('gain');
   const prevPrices = useRef(new Map());
 
@@ -76,13 +76,13 @@ export default function RankTable({ stocks, onSelect }) {
               </td>
               {/* key에 가격을 넣어 가격이 바뀔 때마다 플래시 애니메이션이 다시 돈다 */}
               <td key={`p${s.price}`} className={`num ${flashOf(s)}`}>
-                {fmtPrice(s.price)}
+                {market.fmtPrice(s.price)}
               </td>
               <td className={`num ${cls(s.pct)}`} style={{ fontWeight: 700 }}>
                 {fmtPct(s.pct)}
               </td>
               <td className="num" style={{ color: 'var(--dim)' }}>
-                {fmtEok(s.vol)}
+                {s.volText}
               </td>
             </tr>
           ))}

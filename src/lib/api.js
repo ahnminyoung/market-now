@@ -1,6 +1,6 @@
 /* 네이버 증권 비공식 API 래퍼. 모든 경로는 vite.config.js의 프록시를 거친다. */
 
-async function getJson(url) {
+export async function getJson(url) {
   const res = await fetch(url, { headers: { accept: 'application/json' } });
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`);
   return res.json();
@@ -11,7 +11,7 @@ export const num = v =>
   typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(/,/g, '')) || 0;
 
 // API의 등락률은 대체로 부호가 포함되지만, 방향 타입으로 한 번 더 보정한다.
-function signedPct(ratio, directionName) {
+export function signedPct(ratio, directionName) {
   let p = num(ratio);
   if ((directionName === 'FALLING' || directionName === 'LOWER_LIMIT') && p > 0) p = -p;
   return p;
@@ -45,14 +45,18 @@ export const heatText = p => (Math.abs(p) > 15 ? '#fff' : '#10131a');
 
 const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, '');
 
-const mapStock = market => s => ({
-  code: s.itemCode,
-  name: s.stockName,
-  market,
-  price: num(s.closePrice),
-  pct: signedPct(s.fluctuationsRatio, s.compareToPreviousPrice?.name),
-  vol: num(s.accumulatedTradingValue) / 100, // 백만원 → 억원
-});
+const mapStock = market => s => {
+  const vol = num(s.accumulatedTradingValue) / 100; // 백만원 → 억원
+  return {
+    code: s.itemCode,
+    name: s.stockName,
+    market,
+    price: num(s.closePrice),
+    pct: signedPct(s.fluctuationsRatio, s.compareToPreviousPrice?.name),
+    vol,
+    volText: fmtEok(vol),
+  };
+};
 
 /* ---------- 지수 / 환율 ---------- */
 export async function fetchIndices() {
@@ -120,13 +124,42 @@ export async function fetchMarketSnapshot() {
   };
 }
 
-// 상장 종목 총수 (보합 종목 수 계산용 — 자주 바뀌지 않으므로 긴 주기로 호출)
-export async function fetchTotalCount() {
-  const [k, q] = await Promise.all([
-    getJson('/n-api/stocks/marketValue/KOSPI?page=1&pageSize=1'),
-    getJson('/n-api/stocks/marketValue/KOSDAQ?page=1&pageSize=1'),
+// 시장 온도: 상승/하락 랭킹의 totalCount가 곧 상승/하락 종목 수,
+// 시가총액 랭킹의 totalCount가 전체 상장 종목 수다 (실측으로 확인).
+export async function fetchBreadthKr() {
+  const get = (sort, mk) => getJson(`/n-api/stocks/${sort}/${mk}?page=1&pageSize=1`);
+  const [uk, uq, dk, dq, mk, mq] = await Promise.all([
+    get('up', 'KOSPI'), get('up', 'KOSDAQ'),
+    get('down', 'KOSPI'), get('down', 'KOSDAQ'),
+    get('marketValue', 'KOSPI'), get('marketValue', 'KOSDAQ'),
   ]);
-  return (k.totalCount ?? 0) + (q.totalCount ?? 0);
+  return {
+    up: (uk.totalCount ?? 0) + (uq.totalCount ?? 0),
+    down: (dk.totalCount ?? 0) + (dq.totalCount ?? 0),
+    total: (mk.totalCount ?? 0) + (mq.totalCount ?? 0),
+  };
+}
+
+// 지수 카드 스파크라인용 일별 종가 시계열 묶음
+export async function fetchIndexSeriesKr() {
+  const out = {};
+  await Promise.all([
+    ...['KOSPI', 'KOSDAQ', 'KPI200'].map(async code => {
+      try {
+        out[code] = (await fetchIndexCandles(code)).map(c => c.closePrice);
+      } catch (e) {
+        console.warn('index candles failed:', e.message);
+      }
+    }),
+    (async () => {
+      try {
+        out.FX_USDKRW = await fetchFxSeries();
+      } catch (e) {
+        console.warn('fx series failed:', e.message);
+      }
+    })(),
+  ]);
+  return out;
 }
 
 /* ---------- 테마 ---------- */
@@ -169,6 +202,36 @@ export async function fetchStockDetail(code) {
     tradingValueEok: num(info('accumulatedTradingValue')) / 100, // 백만원 → 억원
     high52: info('highPriceOf52Weeks') ?? '—',
     low52: info('lowPriceOf52Weeks') ?? '—',
+  };
+}
+
+/* ---------- 실적 / 재무 ---------- */
+const FINANCE_METRICS = ['매출액', '영업이익', '당기순이익', '부채비율'];
+
+function parseFinanceData(d) {
+  const fi = d.financeInfo ?? {};
+  return {
+    periods: fi.trTitleList ?? [],
+    rows: (fi.rowList ?? []).filter(r => FINANCE_METRICS.includes(r.title)),
+  };
+}
+
+export async function fetchAnnualFinance(code) {
+  return parseFinanceData(await getJson(`/n-api/stock/${code}/finance/annual`));
+}
+
+export async function fetchQuarterFinance(code) {
+  return parseFinanceData(await getJson(`/n-api/stock/${code}/finance/quarter`));
+}
+
+export async function fetchStockMetrics(code) {
+  const d = await getJson(`/n-api/stock/${code}/integration`);
+  const info = c => d.totalInfos?.find(i => i.code === c)?.value ?? '—';
+  return {
+    foreignRate: info('foreignRate'),
+    per: info('per'),
+    pbr: info('pbr'),
+    eps: info('eps'),
   };
 }
 

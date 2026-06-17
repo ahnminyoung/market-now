@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { searchStocks, fmtPct, cls } from '../lib/api.js';
+import { NavLink } from 'react-router-dom';
+import { fmtPct, cls } from '../lib/api.js';
 
 const STATUS_LABEL = { OPEN: '장중', CLOSE: '장마감', PREOPEN: '장 시작 전' };
+
+const NAV = [
+  { to: '/kr', label: '국장' },
+  { to: '/us', label: '미장' },
+  { to: '/calendar', label: '캘린더' },
+  { to: '/earnings', label: '실적' },
+];
 
 function Clock() {
   const [now, setNow] = useState(() => new Date());
@@ -16,7 +24,7 @@ function Clock() {
   );
 }
 
-function SearchBox({ stocks, onSelect }) {
+function SearchBox({ market, stocks, onSelect }) {
   const [q, setQ] = useState('');
   const [hits, setHits] = useState([]);
   const boxRef = useRef(null);
@@ -30,7 +38,7 @@ function SearchBox({ stocks, onSelect }) {
     let alive = true;
     const t = setTimeout(async () => {
       try {
-        const items = await searchStocks(query);
+        const items = await market.search(query);
         if (alive) setHits(items.slice(0, 6));
       } catch {
         if (alive) setHits([]);
@@ -40,7 +48,7 @@ function SearchBox({ stocks, onSelect }) {
       alive = false;
       clearTimeout(t);
     };
-  }, [q]);
+  }, [q, market]);
 
   useEffect(() => {
     const onDoc = e => {
@@ -88,16 +96,26 @@ function SearchBox({ stocks, onSelect }) {
   );
 }
 
-export default function TopBar({ marketStatus, stocks, onSelect }) {
+export default function TopBar({ market = null, marketStatus = null, stocks = [], onSelect }) {
   const open = marketStatus === 'OPEN';
   return (
     <div className="topbar">
-      <div className="logo">
-        마켓<em>나우</em>
+      <div className="topbar-left">
+        <div className="logo">
+          마켓<em>나우</em>
+        </div>
+        <nav className="gnav">
+          {NAV.map(n => (
+            <NavLink key={n.to} to={n.to}>
+              {n.label}
+            </NavLink>
+          ))}
+        </nav>
       </div>
-      <SearchBox stocks={stocks} onSelect={onSelect} />
+      {market && <SearchBox market={market} stocks={stocks} onSelect={onSelect} />}
       <div className={`live ${open ? '' : 'off'}`}>
-        <Clock /> {STATUS_LABEL[marketStatus] ?? '연결 중'}
+        <Clock />
+        {marketStatus && ` ${STATUS_LABEL[marketStatus] ?? '연결 중'}`}
       </div>
     </div>
   );

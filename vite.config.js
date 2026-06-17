@@ -25,7 +25,11 @@ export default defineConfig({
       '/n-front': proxy('https://m.stock.naver.com', /^\/n-front/, '/front-api'),
       '/n-polling': proxy('https://polling.finance.naver.com', /^\/n-polling/, '/api'),
       '/n-chart': proxy('https://api.stock.naver.com', /^\/n-chart/, '/chart'),
+      '/n-stockapi': proxy('https://api.stock.naver.com', /^\/n-stockapi/, ''),
       '/n-ac': proxy('https://ac.stock.naver.com', /^\/n-ac/, ''),
+      // 실적 캘린더 실제 데이터 소스
+      '/dart': { target: 'https://opendart.fss.or.kr', changeOrigin: true, rewrite: p => p.replace(/^\/dart/, '') },
+      '/alphavantage': { target: 'https://www.alphavantage.co', changeOrigin: true, rewrite: p => p.replace(/^\/alphavantage/, '') },
     },
   },
 });

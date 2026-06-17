@@ -1,14 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import usePolling from '../hooks/usePolling.js';
-import {
-  fetchStockLive,
-  fetchStockDetail,
-  fetchStockCandles,
-  fmtPrice,
-  fmtPct,
-  fmtEok,
-  cls,
-} from '../lib/api.js';
+import { fmtPct, cls } from '../lib/api.js';
 
 function drawCandles(canvas, candles) {
   const ctx = canvas.getContext('2d');
@@ -40,28 +32,30 @@ function drawCandles(canvas, candles) {
   });
 }
 
-export default function StockModal({ stock, onClose }) {
+export default function StockModal({ market, stock, onClose }) {
   const code = stock?.code;
   const canvasRef = useRef(null);
   const [detail, setDetail] = useState(null);
 
   // 현재가는 실시간 폴링, 상세/캔들은 종목이 바뀔 때 한 번
-  const live = usePolling(code ? () => fetchStockLive(code) : null, 5000, [code]);
+  const live = usePolling(code ? () => market.fetchStockLive(code) : null, 5000, [code]);
 
   useEffect(() => {
     setDetail(null);
     if (!code) return;
     let alive = true;
-    fetchStockDetail(code)
+    market
+      .fetchStockDetail(code)
       .then(d => alive && setDetail(d))
       .catch(e => console.warn('detail failed:', e.message));
-    fetchStockCandles(code)
+    market
+      .fetchStockCandles(code)
       .then(c => alive && canvasRef.current && drawCandles(canvasRef.current, c.slice(-30)))
       .catch(e => console.warn('candles failed:', e.message));
     return () => {
       alive = false;
     };
-  }, [code]);
+  }, [code, market]);
 
   useEffect(() => {
     const onKey = e => e.key === 'Escape' && onClose();
@@ -86,7 +80,7 @@ export default function StockModal({ stock, onClose }) {
           </div>
           <button className="close" onClick={onClose}>✕</button>
         </div>
-        <div className="m-price num">{price != null ? fmtPrice(price) + '원' : '—'}</div>
+        <div className="m-price num">{price != null ? market.fmtMoney(price) : '—'}</div>
         <div className={`m-chg num ${pct != null ? cls(pct) : 'flat'}`}>
           {pct != null ? `${pct > 0 ? '▲' : pct < 0 ? '▼' : ''} ${fmtPct(pct)} 오늘` : '시세 조회 중'}
         </div>
@@ -94,15 +88,15 @@ export default function StockModal({ stock, onClose }) {
         <div className="m-stats">
           <div className="m-stat">
             <div className="k">거래대금</div>
-            <div className="v num">{detail ? fmtEok(detail.tradingValueEok) + '원' : '—'}</div>
+            <div className="v num">{detail?.tradingValueText ?? '—'}</div>
           </div>
           <div className="m-stat">
             <div className="k">52주 최고</div>
-            <div className="v num">{detail ? detail.high52 + '원' : '—'}</div>
+            <div className="v num">{detail?.high52Text ?? '—'}</div>
           </div>
           <div className="m-stat">
             <div className="k">52주 최저</div>
-            <div className="v num">{detail ? detail.low52 + '원' : '—'}</div>
+            <div className="v num">{detail?.low52Text ?? '—'}</div>
           </div>
         </div>
       </div>
