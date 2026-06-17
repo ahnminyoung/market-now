@@ -6,6 +6,7 @@ import Tape from './Tape.jsx';
 import IndexCards from './IndexCards.jsx';
 import RankTable from './RankTable.jsx';
 import Breadth from './Breadth.jsx';
+import BreadthListModal from './BreadthListModal.jsx';
 import Heatmap from './Heatmap.jsx';
 import StockModal from './StockModal.jsx';
 
@@ -24,6 +25,10 @@ export default function MarketDashboard({ marketId }) {
   const closeStock = useCallback(() => setSelected(null), []);
   useEffect(() => setSelected(null), [marketId]);
 
+  const [breadthFilter, setBreadthFilter] = useState(null);
+  const closeBreadthFilter = useCallback(() => setBreadthFilter(null), []);
+  useEffect(() => setBreadthFilter(null), [marketId]);
+
   const stocks = snapshot?.stocks ?? [];
   const marketStatus = snapshot?.marketStatus ?? indices?.[0]?.marketStatus ?? null;
 
@@ -37,12 +42,29 @@ export default function MarketDashboard({ marketId }) {
           {/* key로 시장 전환 시 탭/플래시 등 내부 상태를 초기화 */}
           <RankTable key={marketId} market={m} stocks={stocks} onSelect={openStock} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <Breadth up={breadth?.up ?? 0} down={breadth?.down ?? 0} total={breadth?.total ?? 0} />
+            <Breadth
+              up={breadth?.up ?? 0}
+              down={breadth?.down ?? 0}
+              total={breadth?.total ?? 0}
+              onFilter={m.id === 'kr' ? setBreadthFilter : undefined}
+            />
             <Heatmap themes={themes} onSelect={openStock} />
           </div>
         </div>
       </main>
       <StockModal market={m} stock={selected} onClose={closeStock} />
+      {breadthFilter && (
+        <BreadthListModal
+          direction={breadthFilter}
+          count={
+            breadthFilter === 'up' ? (breadth?.up ?? 0) :
+            breadthFilter === 'down' ? (breadth?.down ?? 0) :
+            Math.max((breadth?.total ?? 0) - (breadth?.up ?? 0) - (breadth?.down ?? 0), 0)
+          }
+          onClose={closeBreadthFilter}
+          onSelect={openStock}
+        />
+      )}
     </>
   );
 }

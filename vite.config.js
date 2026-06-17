@@ -30,6 +30,8 @@ export default defineConfig({
       // 실적 캘린더 실제 데이터 소스
       '/dart': { target: 'https://opendart.fss.or.kr', changeOrigin: true, rewrite: p => p.replace(/^\/dart/, '') },
       '/alphavantage': { target: 'https://www.alphavantage.co', changeOrigin: true, rewrite: p => p.replace(/^\/alphavantage/, '') },
+      // 종목 관련 뉴스 (Google News RSS)
+      '/gnews': { target: 'https://news.google.com', changeOrigin: true, rewrite: p => p.replace(/^\/gnews/, '') },
     },
   },
 });

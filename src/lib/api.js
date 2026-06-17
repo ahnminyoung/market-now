@@ -181,6 +181,68 @@ export async function fetchThemes(count = 6) {
   }));
 }
 
+/* ---------- 시장온도 종목 리스트 ---------- */
+// direction: 'up' | 'down' | 'flat'
+// flat은 Naver에 전용 엔드포인트가 없어 전체 시가총액 목록을 병렬 스캔 후 등락률 0 필터링
+export async function fetchBreadthStockPage(direction, page = 1, pageSize = 100) {
+  const mapS = market => s => ({
+    code: s.itemCode,
+    name: s.stockName,
+    market,
+    price: num(s.closePrice),
+    pct: signedPct(s.fluctuationsRatio, s.compareToPreviousPrice?.name),
+  });
+
+  if (direction === 'flat') {
+    // 첫 페이지로 총 종목 수 파악 → 전 페이지 병렬 패치 → pct=0 필터
+    const SCAN_SIZE = 100;
+    const [k1, q1] = await Promise.all([
+      getJson(`/n-api/stocks/marketValue/KOSPI?page=1&pageSize=${SCAN_SIZE}`),
+      getJson(`/n-api/stocks/marketValue/KOSDAQ?page=1&pageSize=${SCAN_SIZE}`),
+    ]);
+    const kospiPages = Math.min(Math.ceil((k1.totalCount ?? 0) / SCAN_SIZE), 20);
+    const kosdaqPages = Math.min(Math.ceil((q1.totalCount ?? 0) / SCAN_SIZE), 20);
+    const [kRest, qRest] = await Promise.all([
+      Promise.all(Array.from({ length: kospiPages - 1 }, (_, i) =>
+        getJson(`/n-api/stocks/marketValue/KOSPI?page=${i + 2}&pageSize=${SCAN_SIZE}`).catch(() => ({ stocks: [] }))
+      )),
+      Promise.all(Array.from({ length: kosdaqPages - 1 }, (_, i) =>
+        getJson(`/n-api/stocks/marketValue/KOSDAQ?page=${i + 2}&pageSize=${SCAN_SIZE}`).catch(() => ({ stocks: [] }))
+      )),
+    ]);
+    // compareToPreviousPrice.name === 'UNCHANGED' 이 실제 보합 판별 기준
+    const mapSFlat = market => s => ({
+      code: s.itemCode,
+      name: s.stockName,
+      market,
+      price: num(s.closePrice),
+      pct: signedPct(s.fluctuationsRatio, s.compareToPreviousPrice?.name),
+      _dir: s.compareToPreviousPrice?.name,
+    });
+    const all = [
+      ...[k1, ...kRest].flatMap(d => (d.stocks ?? []).map(mapSFlat('코스피'))),
+      ...[q1, ...qRest].flatMap(d => (d.stocks ?? []).map(mapSFlat('코스닥'))),
+    ];
+    const flatStocks = all.filter(s => s._dir === 'UNCHANGED').map(({ _dir, ...s }) => s);
+    return { stocks: flatStocks, total: flatStocks.length, hasMore: false };
+  }
+
+  const [k, q] = await Promise.all([
+    getJson(`/n-api/stocks/${direction}/KOSPI?page=${page}&pageSize=${pageSize}`),
+    getJson(`/n-api/stocks/${direction}/KOSDAQ?page=${page}&pageSize=${pageSize}`),
+  ]);
+  const kospiTotal = k.totalCount ?? 0;
+  const kosdaqTotal = q.totalCount ?? 0;
+  return {
+    stocks: [
+      ...(k.stocks ?? []).map(mapS('코스피')),
+      ...(q.stocks ?? []).map(mapS('코스닥')),
+    ],
+    total: kospiTotal + kosdaqTotal,
+    hasMore: page * pageSize < kospiTotal || page * pageSize < kosdaqTotal,
+  };
+}
+
 /* ---------- 개별 종목 ---------- */
 export async function fetchStockLive(code) {
   const d = await getJson(`/n-polling/realtime/domestic/stock/${code}`);
@@ -233,6 +295,50 @@ export async function fetchStockMetrics(code) {
     pbr: info('pbr'),
     eps: info('eps'),
   };
+}
+
+/* ---------- 관련 뉴스 (Google News RSS) ---------- */
+export async function fetchStockNews(name, count = 7) {
+  const q = encodeURIComponent(`${name} 주식`);
+  const res = await fetch(`/gnews/rss/search?q=${q}&hl=ko&gl=KR&ceid=KR:ko`);
+  if (!res.ok) throw new Error('news fetch failed');
+  const text = await res.text();
+  const doc = new DOMParser().parseFromString(text, 'text/xml');
+  return Array.from(doc.querySelectorAll('item')).slice(0, count).map(item => {
+    const title = item.querySelector('title')?.textContent ?? '';
+    const raw = item.querySelector('pubDate')?.textContent ?? '';
+    const d = raw ? new Date(raw) : null;
+    const date = d && !isNaN(d)
+      ? `${d.getMonth() + 1}.${String(d.getDate()).padStart(2, '0')}`
+      : '';
+    return {
+      title: title.replace(/ - [^-]+$/, '').trim(),
+      url: item.querySelector('link')?.textContent?.trim() ?? '',
+      source: item.querySelector('source')?.textContent?.trim() ?? '',
+      date,
+    };
+  });
+}
+
+/* ---------- DART 공시 ---------- */
+export async function fetchDartDisclosures(stockCode, maxItems = 8) {
+  const key = import.meta.env.VITE_DART_API_KEY;
+  if (!key) throw new Error('no key');
+  const today = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const end = `${today.getFullYear()}${pad(today.getMonth() + 1)}${pad(today.getDate())}`;
+  // stock_code 직접 지원 (3개월 이내)
+  const start3m = new Date(Date.now() - 90 * 864e5);
+  const start = `${start3m.getFullYear()}${pad(start3m.getMonth() + 1)}${pad(start3m.getDate())}`;
+  const d = await getJson(
+    `/dart/api/list.json?crtfc_key=${key}&stock_code=${stockCode}&bgn_de=${start}&end_de=${end}&page_no=1&page_count=${maxItems}`
+  );
+  if (d.status !== '000') throw new Error('no data');
+  return (d.list ?? []).map(i => ({
+    title: i.report_nm?.trim(),
+    date: `${i.rcept_dt.slice(0, 4)}.${i.rcept_dt.slice(4, 6)}.${i.rcept_dt.slice(6, 8)}`,
+    url: `https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${i.rcept_no}`,
+  }));
 }
 
 /* ---------- 검색 ---------- */
