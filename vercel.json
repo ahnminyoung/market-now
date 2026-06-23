@@ -1,0 +1,13 @@
+{
+  "rewrites": [
+    { "source": "/n-api/:path*",      "destination": "/api/proxy?t=naver-api&p=:path*" },
+    { "source": "/n-front/:path*",    "destination": "/api/proxy?t=naver-front&p=:path*" },
+    { "source": "/n-polling/:path*",  "destination": "/api/proxy?t=naver-polling&p=:path*" },
+    { "source": "/n-chart/:path*",    "destination": "/api/proxy?t=naver-chart&p=:path*" },
+    { "source": "/n-stockapi/:path*", "destination": "/api/proxy?t=naver-stock&p=:path*" },
+    { "source": "/n-ac/:path*",       "destination": "/api/proxy?t=naver-ac&p=:path*" },
+    { "source": "/dart/:path*",       "destination": "/api/proxy?t=dart&p=:path*" },
+    { "source": "/alphavantage/:path*","destination": "/api/proxy?t=alphavantage&p=:path*" },
+    { "source": "/gnews/:path*",      "destination": "/api/proxy?t=gnews&p=:path*" }
+  ]
+}
