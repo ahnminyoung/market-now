@@ -14,6 +14,7 @@ import {
   searchStocks,
   fmtPrice,
   fmtEok,
+  fmtShares,
 } from './api.js';
 import {
   fetchIndicesUs,
@@ -47,6 +48,8 @@ export const MARKETS = {
         tradingValueText: fmtEok(d.tradingValueEok) + '원',
         high52Text: d.high52 + '원',
         low52Text: d.low52 + '원',
+        marketCapText: d.marketValue !== '—' ? d.marketValue + '원' : '—',
+        tradingVolumeText: fmtShares(d.tradingVolume),
       };
     },
     search: searchStocks,

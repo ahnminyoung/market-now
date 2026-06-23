@@ -1,5 +1,5 @@
 /* 미국 시장 데이터 레이어 (네이버 해외주식 API, 시세는 거래소 기준 지연 시세) */
-import { getJson, num, signedPct, fetchFxSeries } from './api.js';
+import { getJson, num, signedPct, fetchFxSeries, fmtShares } from './api.js';
 
 const EXCHANGES = ['NYSE', 'NASDAQ'];
 const INDEX_NAMES = { '.INX': 'S&P 500', '.IXIC': '나스닥', '.DJI': '다우존스' };
@@ -177,16 +177,19 @@ export async function fetchStockCandlesUs(code, days = 70) {
 
 // 해외 종목은 52주 고저 필드를 주는 API가 없어 1년치 일봉에서 직접 계산한다.
 export async function fetchStockDetailUs(code) {
-  const [candles, live] = await Promise.all([
+  const [candles, liveData] = await Promise.all([
     fetchStockCandlesUs(code, 372),
-    fetchStockLiveUs(code).catch(() => null),
+    getJson(`/n-polling/realtime/worldstock/stock/${code}`).catch(() => null),
   ]);
+  const it = liveData?.datas?.[0];
   const highs = candles.map(c => c.highPrice);
   const lows = candles.map(c => c.lowPrice);
   return {
-    tradingValueText: live?.tradingValueText ?? '—',
+    tradingValueText: it?.accumulatedTradingValue ?? '—',
     high52Text: highs.length ? fmtUsd(Math.max(...highs)) : '—',
     low52Text: lows.length ? fmtUsd(Math.min(...lows)) : '—',
+    marketCapText: it?.marketValueHangeul ?? '—',
+    tradingVolumeText: fmtShares(it?.accumulatedTradingVolume),
   };
 }
 

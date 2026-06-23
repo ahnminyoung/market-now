@@ -185,7 +185,9 @@ function SectionTitle({ children }) {
 
 function MetricGrid({ metrics, detail }) {
   const items = [
+    { k: '시가총액', v: detail?.marketCapText },
     { k: '거래대금', v: detail?.tradingValueText },
+    { k: '거래량', v: detail?.tradingVolumeText },
     { k: '52주 최고', v: detail?.high52Text },
     { k: '52주 최저', v: detail?.low52Text },
     { k: '외인보유율', v: metrics?.foreignRate },

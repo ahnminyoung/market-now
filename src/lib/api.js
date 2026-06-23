@@ -18,6 +18,13 @@ export function signedPct(ratio, directionName) {
 }
 
 export const fmtPct = p => (p > 0 ? '+' : '') + p.toFixed(2) + '%';
+export function fmtShares(v) {
+  const n = Number(String(v ?? '').replace(/,/g, ''));
+  if (!n || isNaN(n)) return '—';
+  if (n >= 1e8) return `${(n / 1e8).toFixed(1)}억주`;
+  if (n >= 1e4) return `${Math.round(n / 1e4).toLocaleString('ko-KR')}만주`;
+  return `${n.toLocaleString('ko-KR')}주`;
+}
 export const fmtPrice = v =>
   v >= 10000
     ? Math.round(v).toLocaleString('ko-KR')
@@ -189,6 +196,7 @@ export async function fetchBreadthStockPage(direction, page = 1, pageSize = 100)
     code: s.itemCode,
     name: s.stockName,
     market,
+    stockType: s.stockEndType ?? 'stock',
     price: num(s.closePrice),
     pct: signedPct(s.fluctuationsRatio, s.compareToPreviousPrice?.name),
   });
@@ -215,6 +223,7 @@ export async function fetchBreadthStockPage(direction, page = 1, pageSize = 100)
       code: s.itemCode,
       name: s.stockName,
       market,
+      stockType: s.stockEndType ?? 'stock',
       price: num(s.closePrice),
       pct: signedPct(s.fluctuationsRatio, s.compareToPreviousPrice?.name),
       _dir: s.compareToPreviousPrice?.name,
@@ -264,6 +273,8 @@ export async function fetchStockDetail(code) {
     tradingValueEok: num(info('accumulatedTradingValue')) / 100, // 백만원 → 억원
     high52: info('highPriceOf52Weeks') ?? '—',
     low52: info('lowPriceOf52Weeks') ?? '—',
+    marketValue: info('marketValue') ?? '—',
+    tradingVolume: info('accumulatedTradingVolume') ?? '—',
   };
 }
 
